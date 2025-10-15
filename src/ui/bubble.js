@@ -100,13 +100,13 @@ export function createBubble({ color, textColor, onClick, infoMessage, position,
       display: 'flex',
       alignItems: 'center',
       justifyContent: rightPlaced ? 'end' : 'start',
+      margin: '10px 0px',
       gap: '10px',
       cursor: 'pointer'
     }
   });
 
   if (infoMessage) {
-    // logic for positioning info message opposite the bubble
     wrapper.appendChild(tip);
     wrapper.appendChild(bubble);
 
@@ -116,6 +116,15 @@ export function createBubble({ color, textColor, onClick, infoMessage, position,
     });
 
     return { el: wrapper, bubbleEl: bubble, tipEl: tip };
+  }
+  else {
+    wrapper.appendChild(bubble);
+
+    wrapper.addEventListener('click', (e) => {
+      if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      onClick && onClick(e);
+    });
+    return { el: wrapper, bubbleEl: bubble };
   }
 
   bubble.addEventListener('click', onClick);
