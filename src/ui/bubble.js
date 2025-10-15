@@ -63,13 +63,14 @@ export function createBubble({ color, textColor, onClick, infoMessage, position,
       style: {
         background: color || 'var(--euclid-color,#06B6D4)',
         color: textColor || 'var(--euclid-text,#ffffff)',
-        padding: '10px 12px',
+        padding: '12px 14px',
         borderRadius: '12px',
         boxShadow: '0 3px 8px rgba(0,0,0,0.12)',
-        fontSize: '13px',
+        fontSize: '14px',
         whiteSpace: 'nowrap',
         order: rightPlaced ? -1 : 1,
         position: 'relative'
+
       }
     }, infoMessage);
 
@@ -98,6 +99,7 @@ export function createBubble({ color, textColor, onClick, infoMessage, position,
     style: {
       display: 'flex',
       alignItems: 'center',
+      justifyContent: rightPlaced ? 'end' : 'start',
       gap: '10px',
       cursor: 'pointer'
     }

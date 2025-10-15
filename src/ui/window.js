@@ -21,10 +21,11 @@ export function createChatWindow({ botName, color, textColor, bubbleIcon, onSend
       boxShadow: '0 6px 20px rgba(0,0,0,0.10)', // slightly lighter shadow
       display: 'flex',
       flexDirection: 'column',
-      width: '320px',
-      maxHeight: '480px',
+      width: '380px',
+      maxHeight: '465px',
       overflow: 'hidden',
-      fontFamily: 'system-ui, sans-serif'
+      fontFamily: 'system-ui, sans-serif',
+      paddingBottom: '5px'
     }
   });
 
@@ -70,7 +71,7 @@ export function createChatWindow({ botName, color, textColor, bubbleIcon, onSend
       background: 'transparent',
       color: textColor || '#fff',
       border: 'none',
-      fontSize: '16px',
+      fontSize: '15px',
       cursor: 'pointer',
       padding: '4px 8px',
     }
