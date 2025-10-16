@@ -116,7 +116,7 @@ export function createChatWindow({ botName, color, textColor, bubbleIcon, onSend
       borderRadius: '8px',
       border: '1px solid rgba(0,0,0,0.1)',
       outline: 'none',
-      fontSize: '13px'
+      fontSize: '14px'
     }
   });
 
@@ -166,7 +166,7 @@ export function createChatWindow({ botName, color, textColor, bubbleIcon, onSend
         padding: '8px 10px',
         maxWidth: '75%',
         wordBreak: 'break-word',
-        fontSize: '13px',
+        fontSize: '14px',
       }
     }, safeText(text));
 
