@@ -140,7 +140,7 @@ export class EuclidWidget {
             authToken: this.authToken
           });
           stopTyping();
-          const answer = resp?.answer || resp?.text || 'No answer';
+          const answer = resp?.response || resp?.text || 'No answer';
           append('bot', answer);
           this._storeMessage('bot', answer); // 👈 store bot msg
         } catch (err) {
@@ -225,8 +225,8 @@ export class EuclidWidget {
   _ensureGreeting() {
     if (this._greeted) return;
     const greeting =
-      `Hi there👋! My name is ${this.config.bot.botName}. ` +
-      `I am your personal assistant here on ${this.config.bot.businessName}. ` +
+      `Hi there👋! I'm ${this.config.bot.botName}. ` +
+      `Your personal assistant here on ${this.config.bot.businessName}. ` +
       `How can I assist you today?`;
 
     this._storeMessage('bot', greeting); // 👈 store greeting in memory
