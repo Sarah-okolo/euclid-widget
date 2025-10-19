@@ -1,8 +1,8 @@
 // src/api.js
-const DEFAULT_API_HOST = window.__EUCLID_API_HOST__ || 'https://api.yourdomain.com';
+const DEFAULT_API_HOST = 'http://localhost:5173/api';
 
 export async function fetchBotConfig(botId) {
-  const res = await fetch(`${DEFAULT_API_HOST}/api/chatbot/config/${encodeURIComponent(botId)}`, {
+  const res = await fetch(`${DEFAULT_API_HOST}/bots/${encodeURIComponent(botId)}`, {
     credentials: 'omit'
   });
   if (!res.ok) {
@@ -14,7 +14,7 @@ export async function fetchBotConfig(botId) {
 
 // send a message
 export async function sendQuery({ botId, sessionId, message, authToken }) {
-  const res = await fetch(`${DEFAULT_API_HOST}/api/chatbot/query`, {
+  const res = await fetch(`${DEFAULT_API_HOST}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

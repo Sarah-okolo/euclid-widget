@@ -167,6 +167,8 @@ export function createChatWindow({ botName, color, textColor, bubbleIcon, onSend
         maxWidth: '75%',
         wordBreak: 'break-word',
         fontSize: '14px',
+        marginBottom: '5px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.12)'
       }
     }, safeText(text));
 
