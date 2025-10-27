@@ -3,6 +3,8 @@ import { createEl, uid } from './utils';
 import { createBubble } from './ui/bubble';
 import { createChatWindow } from './ui/window';
 import { fetchBotConfig, sendQuery } from './api';
+import { createConfirm } from './ui/modals';
+import { ensureLoggedIn, getAccessToken } from './auth';
 
 const DEFAULTS = {
   color: '#06B6D4',
@@ -11,7 +13,9 @@ const DEFAULTS = {
   position: 'bottom-right'
 };
 
-// Helper: start/stop typing animation
+// Heuristic: messages likely to be actions → ask confirmation first (client-side safety)
+const ACTION_TRIGGERS = /\b(update|create|delete|remove|send|email|invite|approve|schedule|book|pay|charge|transfer)\b/i;
+
 function startTypingAnimation(win, append) {
   append('bot', '▪️');
   const findDotsNode = () => {
@@ -23,13 +27,11 @@ function startTypingAnimation(win, append) {
     }
     return null;
   };
-
   let node = null;
   const ensureNode = () => {
     if (!node || !node.isConnected) node = findDotsNode();
     return node;
   };
-
   const frames = ['▪️', '▪️▪️', '▪️▪️▪️'];
   let idx = 0;
   const interval = setInterval(() => {
@@ -38,7 +40,6 @@ function startTypingAnimation(win, append) {
     idx = (idx + 1) % frames.length;
     target.textContent = frames[idx];
   }, 300);
-
   const stop = () => {
     clearInterval(interval);
     const target = ensureNode();
@@ -70,8 +71,6 @@ export class EuclidWidget {
     this.config = null;
     this.authToken = null;
     this._greeted = false;
-
-    // 👇 stores all messages for the current page session
     this._messages = [];
   }
 
@@ -93,8 +92,12 @@ export class EuclidWidget {
 
     try {
       this._showLoadingTip('Loading assistant...');
-      this.config = await fetchBotConfig(this.botId);
+      const cfgResp = await fetchBotConfig(this.botId);
+      this.config = cfgResp?.bot || cfgResp; // your API returns { status, bot }
       this._hideLoadingTip();
+
+      // Prewarm token silently if possible (optional)
+      await this._maybePrewarmAuth();
 
       if (this.defaultState === 'open') {
         await this.open();
@@ -107,6 +110,28 @@ export class EuclidWidget {
 
     bubbleEl.style.background = this.color;
     bubbleEl.style.color = this.textColor;
+  }
+
+  async _maybePrewarmAuth() {
+    const { authDomain, authAudience, authClientId } = this._authCfg();
+    if (authDomain && authAudience && authClientId) {
+      try {
+        // Silent attempt; doesn’t show popup if there’s no session
+        await ensureLoggedIn({ domain: authDomain, audience: authAudience, clientId: authClientId });
+        this.authToken = await getAccessToken({ domain: authDomain, audience: authAudience, clientId: authClientId });
+      } catch {
+        // Ignore; we’ll prompt only when needed
+      }
+    }
+  }
+
+  _authCfg() {
+    const b = this.config || {};
+    return {
+      domain: (b.authDomain || '').replace(/^https?:\/\//, ''), // ensure bare domain
+      audience: b.authAudience,
+      clientId: b.authClientId, // you said you’ve added this already
+    };
   }
 
   applyPosition() {
@@ -125,31 +150,11 @@ export class EuclidWidget {
     if (this.window) return;
 
     const win = createChatWindow({
-      botName: (this.config && this.config.bot.botName) || 'Assistant',
+      botName: (this.config && this.config.botName) || 'Assistant',
       color: this.color,
       textColor: this.textColor,
       bubbleIcon: this.bubbleIcon,
-      onSend: async (message, append) => {
-        this._storeMessage('user', message); // 👈 store user msg
-        const stopTyping = startTypingAnimation(win, append);
-        try {
-          const resp = await sendQuery({
-            botId: this.botId,
-            sessionId: this.sessionId,
-            message,
-            authToken: this.authToken
-          });
-          stopTyping();
-          const answer = resp?.response || resp?.text || 'No answer';
-          append('bot', answer);
-          this._storeMessage('bot', answer); // 👈 store bot msg
-        } catch (err) {
-          stopTyping();
-          const errMsg = `Error: ${err.message}`;
-          append('bot', errMsg);
-          this._storeMessage('bot', errMsg);
-        }
-      },
+      onSend: (message, append) => this._handleSend(win, message, append),
       onClose: () => {
         if (this.window && this.window.root) {
           this.window.root.remove();
@@ -162,12 +167,126 @@ export class EuclidWidget {
     else this.root.appendChild(win.root);
 
     this.window = win;
-
-    // 👇 restore all previous messages from memory
     this._restoreMessages();
-
-    // greet only once per page session
     this._ensureGreeting();
+  }
+
+  async _handleSend(win, message, append) {
+    this._storeMessage('user', message);
+
+    // Client-side confirmation for likely actions (best-effort UX)
+    if (ACTION_TRIGGERS.test(message)) {
+      const confirmed = await this._confirmModal(`Allow ${this.config?.botName || "the assistant"} to proceed with this action?`);
+      if (!confirmed) {
+        const canceled = "Okay, I won't proceed.";
+        append('bot', canceled);
+        this._storeMessage('bot', canceled);
+        return;
+      }
+    }
+
+    const stopTyping = startTypingAnimation(win, append);
+    try {
+      // If we already have a token, send it. Otherwise, try once without; we’ll handle 401 and retry.
+      const attempt = async (withAuth) => {
+        return sendQuery({
+          botId: this.botId,
+          sessionId: this.sessionId,
+          message,
+          authToken: withAuth ? this.authToken : null
+        });
+      };
+
+      let resp;
+      try {
+        resp = await attempt(!!this.authToken);
+      } catch (e) {
+        // If unauthorized, try to login and retry once
+        if (e.status === 401) {
+          const ok = await this._loginIfNeeded();
+          if (ok) {
+            resp = await attempt(true);
+          } else {
+            throw e;
+          }
+        } else {
+          throw e;
+        }
+      }
+
+      stopTyping();
+      const answer = resp?.response || resp?.text || 'No answer';
+      append('bot', answer);
+      this._storeMessage('bot', answer);
+    } catch (err) {
+      stopTyping();
+      const errMsg = `Error: ${err.message}`;
+      append('bot', errMsg);
+      this._storeMessage('bot', errMsg);
+    }
+  }
+
+  async _loginIfNeeded() {
+    const { authDomain, authAudience, authClientId } = {
+      authDomain: this._authCfg().domain,
+      authAudience: this._authCfg().audience,
+      authClientId: this._authCfg().clientId
+    };
+
+    if (!authDomain || !authAudience || !authClientId) {
+      // Bot not configured for Auth0, cannot login
+      return false;
+    }
+
+    try {
+      await ensureLoggedIn({ domain: authDomain, audience: authAudience, clientId: authClientId });
+      this.authToken = await getAccessToken({ domain: authDomain, audience: authAudience, clientId: authClientId });
+      return true;
+    } catch (e) {
+      console.warn("Auth0 login failed:", e);
+      return false;
+    }
+  }
+
+  async _confirmModal(text) {
+    return new Promise((resolve) => {
+      const node = createConfirm({
+        title: 'Please confirm',
+        text,
+        color: this.color,
+        textColor: this.textColor,
+        onConfirm: () => { cleanup(); resolve(true); },
+        onCancel: () => { cleanup(); resolve(false); },
+      });
+      node.style.position = 'fixed';
+      node.style.zIndex = '2147483647';
+      node.style.left = '50%';
+      node.style.top = '50%';
+      node.style.transform = 'translate(-50%, -50%)';
+      node.style.maxWidth = '420px';
+      node.style.width = 'calc(100% - 40px)';
+      node.style.background = '#fff';
+      node.style.borderRadius = '14px';
+      node.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+      node.style.overflow = 'hidden';
+
+      const backdrop = createEl('div', {
+        style: {
+          position: 'fixed',
+          inset: '0',
+          background: 'rgba(0,0,0,0.35)',
+          zIndex: '2147483646'
+        }
+      });
+
+      const cleanup = () => {
+        backdrop.remove();
+        node.remove();
+      };
+
+      document.body.appendChild(backdrop);
+      document.body.appendChild(node);
+    });
   }
 
   close() {
@@ -224,12 +343,9 @@ export class EuclidWidget {
 
   _ensureGreeting() {
     if (this._greeted) return;
-    const greeting =
-      `Hi there👋! I'm ${this.config.bot.botName}. ` +
-      `Your personal assistant here on ${this.config.bot.businessName}. ` +
-      `How can I assist you today?`;
-
-    this._storeMessage('bot', greeting); // 👈 store greeting in memory
+    const b = this.config || {};
+    const greeting = `Hi there👋! I'm ${b.botName || 'your assistant'}. Your personal assistant here on ${b.businessName || 'this site'}. How can I assist you today?`;
+    this._storeMessage('bot', greeting);
 
     if (!this.window || !this.window.root) return;
     const container = this.window.root;

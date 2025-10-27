@@ -1,10 +1,8 @@
 // src/api.js
-const DEFAULT_API_HOST = 'http://localhost:5173/api';
+const HOST = (typeof window !== "undefined" && window.__EUCLID_API_HOST__) || "https://euclid-be-production.up.railway.app/api";
 
 export async function fetchBotConfig(botId) {
-  const res = await fetch(`${DEFAULT_API_HOST}/bots/${encodeURIComponent(botId)}`, {
-    credentials: 'omit'
-  });
+  const res = await fetch(`${HOST}/bots/${encodeURIComponent(botId)}`, { credentials: "omit" });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Failed to load bot config: ${res.status} ${text}`);
@@ -12,21 +10,29 @@ export async function fetchBotConfig(botId) {
   return res.json();
 }
 
-// send a message
+// Send a message to backend chat
 export async function sendQuery({ botId, sessionId, message, authToken }) {
-  const res = await fetch(`${DEFAULT_API_HOST}/chat`, {
-    method: 'POST',
+  const res = await fetch(`${HOST}/chat`, {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     },
-    body: JSON.stringify({ botId, sessionId, message })
+    body: JSON.stringify({ botId, sessionId, message }),
   });
 
+  // Try to parse JSON safely for better errors
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+
   if (!res.ok) {
-    const j = await res.json().catch(() => null);
-    const err = (j && j.error) ? j.error : `Status ${res.status}`;
-    throw new Error(err);
+    const err = (data && (data.error || data.message)) || `Status ${res.status}`;
+    const status = res.status;
+    const payload = data || null;
+    const e = new Error(err);
+    e.status = status;
+    e.payload = payload;
+    throw e;
   }
-  return res.json();
+  return data || {};
 }
