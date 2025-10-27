@@ -178,7 +178,7 @@ export class EuclidWidget {
     if (ACTION_TRIGGERS.test(message)) {
       const confirmed = await this._confirmModal(`Allow ${this.config?.botName || "the assistant"} to proceed with this action?`);
       if (!confirmed) {
-        const canceled = "Okay, I won't proceed.";
+        const canceled = "I can't proceed because you have refused to grant permission.";
         append('bot', canceled);
         this._storeMessage('bot', canceled);
         return;
@@ -269,6 +269,7 @@ export class EuclidWidget {
       node.style.borderRadius = '14px';
       node.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
       node.style.overflow = 'hidden';
+      node.style.color = '#111';
 
       const backdrop = createEl('div', {
         style: {
