@@ -116,7 +116,8 @@ export function createChatWindow({ botName, color, textColor, bubbleIcon, onSend
       borderRadius: '8px',
       border: '1px solid rgba(0,0,0,0.1)',
       outline: 'none',
-      fontSize: '14px'
+      fontSize: '14px',
+      color: '#111',
     }
   });
 
